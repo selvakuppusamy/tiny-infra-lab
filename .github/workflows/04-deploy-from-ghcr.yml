@@ -1,0 +1,100 @@
+name: Deploy From GHCR
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create image name
+        run: |
+          IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          docker build \
+            -t "$IMAGE_NAME:${{ github.sha }}" \
+            ./app
+
+      - name: Show local runner image
+        run: docker images
+
+      - name: Push image
+        run: docker push "$IMAGE_NAME:${{ github.sha }}"
+
+      - name: Show published image
+        run: echo "$IMAGE_NAME:${{ github.sha }}"
+
+  deploy:
+    needs: build-and-push
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create image name
+        run: |
+          IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image on runner
+        run: |
+          docker pull "$IMAGE_NAME:${{ inputs.image_tag }}"
+
+      - name: Load image into Minikube
+        run: |
+          minikube image load "$IMAGE_NAME:${{ inputs.image_tag }}"
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install tiny-app ./helm/tiny-app \
+            --set image.repository="$IMAGE_NAME" \
+            --set image.tag="${{ inputs.image_tag }}" \
+            --set image.pullPolicy=IfNotPresent
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/tiny-app --timeout=120s
+
+      - name: Show deployed image
+        run: |
+          kubectl get deployment tiny-app \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+          echo
+
+      - name: Smoke test
+        run: |
+          kubectl port-forward service/tiny-app 3000:80 >/tmp/tiny-app-port-forward.log 2>&1 &
+          PF_PID=$!
+          sleep 3
+
+          curl -f http://localhost:3000/health
+
+          kill "$PF_PID"
