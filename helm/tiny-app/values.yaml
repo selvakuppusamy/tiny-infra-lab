@@ -1,0 +1,16 @@
+replicaCount: 2
+
+image:
+  repository: tiny-app
+  tag: local
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: tiny-app.test

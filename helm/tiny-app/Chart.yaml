@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tiny-app
+description: Tiny infrastructure learning app
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

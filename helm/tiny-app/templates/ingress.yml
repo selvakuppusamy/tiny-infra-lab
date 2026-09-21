@@ -1,0 +1,34 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tiny-app
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tiny-app
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
+
+
+# ## Local Ingress note
+
+# Ingress config exists in the Helm chart, but on macOS with Minikube using the Docker driver,
+# the Minikube IP is not directly reachable from the host in the same way as on Linux.
+
+# For local ingress testing:
+# 1. Run `minikube tunnel`
+# 2. Map the ingress hostname in `/etc/hosts`
+# 3. Example:
+#    `127.0.0.1 tiny-app.test`
+
+# For normal local development in this lab, use:
+# `kubectl port-forward service/tiny-app 3000:80`
