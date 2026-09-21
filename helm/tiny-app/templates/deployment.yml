@@ -11,6 +11,7 @@ spec:
     metadata:
       labels:
         app: tiny-app
+
     spec:
       containers:
         - name: tiny-app
@@ -27,3 +28,8 @@ spec:
               port: 3000
             initialDelaySeconds: 2
             periodSeconds: 2
+
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 4 }}
+      {{- end }}
