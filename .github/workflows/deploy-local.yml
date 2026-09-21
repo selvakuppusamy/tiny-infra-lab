@@ -1,0 +1,50 @@
+name: Deploy Tiny App Locally
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t tiny-app:local ./app
+
+      - name: Load image into Minikube
+        run: minikube image load tiny-app:local
+
+      - name: Deploy with Helm
+        run: helm upgrade --install tiny-app ./helm/tiny-app
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/tiny-app --timeout=120s
+
+      - name: Show resources
+        run: |
+          kubectl get deployments
+          kubectl get pods
+          kubectl get services
+
+      - name: Start port forward
+        run: |
+          kubectl port-forward service/tiny-app 3000:80 > /tmp/tiny-app-port-forward.log 2>&1 &
+          echo $! > /tmp/tiny-app-port-forward.pid
+          sleep 3
+
+      - name: Smoke test
+        run: curl -f http://localhost:3000/health
+
+      - name: Show port-forward logs
+        if: always()
+        run: cat /tmp/tiny-app-port-forward.log || true
+
+      - name: Stop port forward
+        if: always()
+        run: |
+          if [ -f /tmp/tiny-app-port-forward.pid ]; then
+            kill "$(cat /tmp/tiny-app-port-forward.pid)" || true
+          fi
