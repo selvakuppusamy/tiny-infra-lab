@@ -33,17 +33,17 @@ jobs:
       - name: Build image
         run: |
           docker build \
-            -t "$IMAGE_NAME:${{ github.sha }}" \
+            -t "$IMAGE_NAME:${{ github.sha }}-${{ github.run_number }}" \
             ./app
 
       - name: Show local runner image
         run: docker images
 
       - name: Push image
-        run: docker push "$IMAGE_NAME:${{ github.sha }}"
+        run: docker push "$IMAGE_NAME:${{ github.sha }}-${{ github.run_number }}"
 
       - name: Show published image
-        run: echo "$IMAGE_NAME:${{ github.sha }}"
+        run: echo "$IMAGE_NAME:${{ github.sha }}-${{ github.run_number }}"
 
   deploy:
     needs: build-and-push
@@ -67,17 +67,17 @@ jobs:
 
       - name: Pull image on runner
         run: |
-          docker pull "$IMAGE_NAME:${{ inputs.image_tag }}"
+          docker pull "$IMAGE_NAME:${{ github.sha }}-${{ github.run_number }}"
 
       - name: Load image into Minikube
         run: |
-          minikube image load "$IMAGE_NAME:${{ inputs.image_tag }}"
+          minikube image load "$IMAGE_NAME:${{ github.sha }}-${{ github.run_number }}"
 
       - name: Deploy with Helm
         run: |
           helm upgrade --install tiny-app ./helm/tiny-app \
             --set image.repository="$IMAGE_NAME" \
-            --set image.tag="${{ inputs.image_tag }}" \
+            --set image.tag="${{ github.sha }}-${{ github.run_number }}" \
             --set image.pullPolicy=IfNotPresent
 
       - name: Wait for rollout
