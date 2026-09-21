@@ -13,6 +13,11 @@ spec:
         app: tiny-app
 
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+
       containers:
         - name: tiny-app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -28,8 +33,3 @@ spec:
               port: 3000
             initialDelaySeconds: 2
             periodSeconds: 2
-
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 4 }}
-      {{- end }}
