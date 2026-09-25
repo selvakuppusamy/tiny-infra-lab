@@ -54,7 +54,27 @@ The repo currently demonstrates:
 
 05-ghcr-image-directly-pulled-by-k8s.yml
 → Kubernetes authenticates to GHCR and pulls the image directly
+
+06-minikube-check-in-ci-runner.yml
+→ start Colima and Minikube on an Ubuntu GitHub-hosted runner
 ```
+
+### Minikube Check in CI Runner
+
+After the workflow is merged into the default branch, open **Actions → Minikube
+Check in CI Runner → Run workflow**. It is manual-only and uses `ubuntu-latest`;
+your MacBook does not need to be online.
+
+The job installs Colima, Lima, QEMU, and a Docker client if needed, starts Colima,
+prints and verifies the `colima` Docker context, then installs Minikube, starts
+it with the Docker driver, and checks cluster status and node readiness. It uses
+Homebrew when available and native Linux packages/release binaries otherwise.
+The Colima VM requires a runner with `/dev/kvm`; the job fails clearly if it is
+unavailable. Tool versions appear in the run logs.
+
+The cluster is temporary: cleanup stops it at the end of the job, and GitHub
+discards the runner. Add experiment steps before cleanup to use the cluster
+during a run. This workflow does not deploy the application or publish images.
 
 ---
 
