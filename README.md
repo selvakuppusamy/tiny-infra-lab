@@ -56,7 +56,7 @@ The repo currently demonstrates:
 → Kubernetes authenticates to GHCR and pulls the image directly
 
 06-minikube-check-in-ci-runner.yml
-→ start Colima and Minikube on an Ubuntu GitHub-hosted runner
+→ check Colima, Docker, and Minikube in three independent Ubuntu jobs
 ```
 
 ### Minikube Check in CI Runner
@@ -65,16 +65,24 @@ After the workflow is merged into the default branch, open **Actions → Minikub
 Check in CI Runner → Run workflow**. It is manual-only and uses `ubuntu-latest`;
 your MacBook does not need to be online.
 
-The job installs Colima, Lima, QEMU, and a Docker client if needed, starts Colima,
-prints and verifies the `colima` Docker context, then installs Minikube, starts
-it with the Docker driver, and checks cluster status and node readiness. It uses
-Homebrew when available and native Linux packages/release binaries otherwise.
-The Colima VM requires a runner with `/dev/kvm`; the job fails clearly if it is
-unavailable. Tool versions appear in the run logs.
+The workflow has three independent jobs, each on its own fresh Ubuntu runner:
 
-The cluster is temporary: cleanup stops it at the end of the job, and GitHub
-discards the runner. Add experiment steps before cleanup to use the cluster
-during a run. This workflow does not deploy the application or publish images.
+- **Colima:** use the preinstalled Homebrew to install Colima and QEMU, grant
+  access to `/dev/kvm`, start Colima, and print its status and Docker context.
+  Homebrew installs Colima's Lima dependency automatically.
+- **Docker:** start the preinstalled Docker engine and print its service status,
+  version, contexts, and engine information.
+- **Minikube:** use the preinstalled Docker and Minikube, start a cluster with the
+  Docker driver, and print `minikube status`.
+
+There are no Homebrew availability checks or fallback installers. The workflow
+relies on the tools included in the [GitHub Ubuntu runner image](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md).
+The Colima job also requires `/dev/kvm` for its VM.
+
+Jobs do not share their Docker engines or clusters: Minikube uses its own
+runner's Docker engine, not the Colima VM from the other job. GitHub discards
+all three runners after the jobs finish. Add experiment steps to the relevant
+job to use its environment during that run.
 
 ---
 

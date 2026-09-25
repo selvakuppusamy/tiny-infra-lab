@@ -7,116 +7,51 @@ permissions:
   contents: read
 
 jobs:
-  minikube-check:
+  colima:
+    name: Colima
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
-
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Colima and dependencies
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HOMEBREW_NO_AUTO_UPDATE: "1"
+      - name: Install and start Colima
         run: |
-          # Homebrew may be installed without being on the runner's PATH.
-          if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
-            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          fi
-
-          if command -v brew >/dev/null 2>&1; then
-            brew install colima lima qemu
-            if ! command -v docker >/dev/null 2>&1; then
-              brew install docker
-            fi
-            echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
-          else
-            sudo apt-get update
-            sudo apt-get install -y qemu-system-x86 qemu-utils
-            if ! command -v docker >/dev/null 2>&1; then
-              sudo apt-get install -y docker.io
-            fi
-
-            # Native Linux fallback using the projects' official release assets.
-            tools_dir="$(mktemp -d)"
-            gh release download --repo lima-vm/lima \
-              --pattern 'lima-*-Linux-x86_64.tar.gz' --dir "$tools_dir"
-            sudo tar -xzf "$tools_dir"/lima-*-Linux-x86_64.tar.gz -C /usr/local
-            gh release download --repo abiosoft/colima \
-              --pattern 'colima-Linux-x86_64' --dir "$tools_dir"
-            sudo install "$tools_dir/colima-Linux-x86_64" /usr/local/bin/colima
-          fi
-
-          colima version
-          limactl --version
-          docker --version
-
-      - name: Enable KVM for Colima
-        run: |
-          if [[ ! -e /dev/kvm ]]; then
-            echo "::error::This runner does not provide /dev/kvm, which this Colima check requires."
-            exit 1
-          fi
-          # Access is scoped to this disposable GitHub-hosted runner.
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install colima qemu
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
-          test -r /dev/kvm && test -w /dev/kvm
-
-      - name: Start Colima
-        run: |
-          colima start --runtime docker --vm-type qemu --cpu 2 --memory 4 --disk 20
+          colima start --runtime docker --vm-type qemu
           colima status
-
-      - name: Verify Docker context
-        run: |
-          docker context use colima
           docker context ls
-          test "$(docker context show)" = colima
           docker --context colima info
-          echo "DOCKER_CONTEXT=colima" >> "$GITHUB_ENV"
 
-      - name: Install Minikube
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Docker and show status
         run: |
-          if command -v brew >/dev/null 2>&1; then
-            brew install minikube
-          else
-            curl --fail --show-error --silent --location --retry 3 \
-              https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
-              --output "$RUNNER_TEMP/minikube"
-            sudo install "$RUNNER_TEMP/minikube" /usr/local/bin/minikube
-          fi
+          sudo systemctl start docker
+          systemctl is-active docker
+          docker version
+          docker context ls
+          docker info
+
+  minikube:
+    name: Minikube
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Minikube and show status
+        run: |
+          sudo systemctl start docker
           minikube version
-
-      - name: Start Minikube
-        run: minikube start --driver=docker --cpus=2 --memory=2200mb --wait=all --wait-timeout=5m
-
-      - name: Check Minikube status
-        run: |
+          minikube start --driver=docker
           minikube status
-          minikube kubectl -- wait --for=condition=Ready nodes --all --timeout=120s
-          minikube kubectl -- get nodes -o wide
-          minikube kubectl -- get pods --all-namespaces
-
-      - name: Failure diagnostics
-        if: failure()
-        run: |
-          colima status || true
-          docker context ls || true
-          docker --context colima info || true
-          minikube status || true
-          minikube logs --problems || true
-
-      - name: Clean up
-        if: always()
-        run: |
-          if command -v minikube >/dev/null 2>&1; then
-            minikube delete || true
-          fi
-          if command -v colima >/dev/null 2>&1; then
-            colima stop || true
-          fi
