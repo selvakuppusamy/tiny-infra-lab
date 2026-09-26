@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    paths:
+      - .github/workflows/05-ghcr-image-directly-pulled-by-k8s.yml
   workflow_dispatch:
 
 permissions:
@@ -64,6 +67,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Kubernetes context
+        if: contains(runner.labels, 'ubuntu-latest')
+        run: |
+          echo "Initializing minikube cluster on Linux environment..."
+          docker context ls
+          minikube start --driver=docker
+          kubectl config set-context --current --namespace=default
 
       - name: Create GHCR pull secret in Kubernetes
         run: |
