@@ -54,7 +54,29 @@ The repo currently demonstrates:
 
 05-ghcr-image-directly-pulled-by-k8s.yml
 → Kubernetes authenticates to GHCR and pulls the image directly
+
+06-minikube-check-in-ci-runner.yml
+→ start Docker and Minikube and verify Kubernetes readiness on Ubuntu
 ```
+
+### Minikube Check in CI Runner
+
+The workflow runs on `ubuntu-latest` when a pull request changes its YAML file.
+After merge, you can also open **Actions → Minikube Check in CI Runner → Run
+workflow** to start it manually. Your MacBook does not need to be online.
+
+One job uses the Docker and Minikube already installed in the
+[GitHub Ubuntu runner image](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md).
+No Colima, Homebrew, or extra installation steps are needed.
+
+The job starts Docker and prints its status, starts Minikube with the Docker
+driver and waits for Kubernetes components, then runs `minikube status`, checks
+the API server's `/readyz` endpoint, and waits for the node to be Ready. It also
+prints the nodes and kube-system pods. Any failed readiness check fails the job,
+so the PR check provides evidence that the cluster is working before merge.
+
+The cluster exists only during this job; GitHub discards the runner afterwards.
+Add experiment steps after the readiness check to use it during a run.
 
 ---
 
