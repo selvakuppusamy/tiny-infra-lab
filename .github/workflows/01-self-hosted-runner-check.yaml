@@ -2,10 +2,16 @@ name: Self Hosted Runner Check
 
 on:
   workflow_dispatch:
+    inputs:
+      runner_label:
+        description: 'Optional custom runner label (leave empty for default self-hosted runner)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   check-runner:
-    runs-on: self-hosted
+    runs-on: ${{ github.event.inputs.runner_label || 'self-hosted' }}
 
     steps:
       - name: Show machine
