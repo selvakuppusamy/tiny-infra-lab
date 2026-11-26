@@ -2,10 +2,16 @@ name: Self Hosted Runner Check
 
 on:
   workflow_dispatch:
+    inputs:
+      runner_label:
+        description: 'Optional custom runner label (leave empty for default self-hosted runner)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   check-runner:
-    runs-on: self-hosted
+    runs-on: ${{ github.event.inputs.runner_label || 'self-hosted' }}
 
     steps:
       - name: Show machine
@@ -13,6 +19,9 @@ jobs:
           echo "Runner is alive"
           hostname
           uname -a
+
+      - name: Wait 1 min for live VM inspection
+        run: echo "Waiting 60s so you can inspect the live runner/VM..." && sleep 60
 
       - name: Check tools
         run: |
