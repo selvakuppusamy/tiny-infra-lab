@@ -20,6 +20,9 @@ jobs:
           hostname
           uname -a
 
+      - name: Wait 1 min for live VM inspection
+        run: echo "Waiting 60s so you can inspect the live runner/VM..." && sleep 60
+
       - name: Check tools
         run: |
           docker --version

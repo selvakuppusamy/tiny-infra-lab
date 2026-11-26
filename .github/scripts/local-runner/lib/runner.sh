@@ -173,6 +173,11 @@ wait_for_runners_online() {
   return 1
 }
 
+# Report whether this session started processes or registered any host runner instances.
+has_session_resources() {
+  [[ ${#STARTED_RUNNER_PIDS[@]} -gt 0 || ${#REGISTERED_RUNNERS[@]} -gt 0 ]]
+}
+
 # Gracefully stop every background runner process tracked in this session.
 stop_all_runners() {
   # Guard empty array expansion for macOS Bash 3.2 compatibility.
@@ -239,4 +244,11 @@ deregister_all_runners() {
     fi
     unset remove_token
   done
+}
+
+# Keep host session directory intact so runner.log and _diag/pages/*.log stay available for debugging.
+finalize_runner_environment() {
+  if [[ -n "${SESSION_DIR:-}" && -d "$SESSION_DIR" ]]; then
+    echo "Diagnostic logs retained at: $SESSION_DIR"
+  fi
 }

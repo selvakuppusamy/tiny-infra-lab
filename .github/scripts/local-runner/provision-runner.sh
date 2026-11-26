@@ -1,5 +1,6 @@
 #!/bin/bash
-# Orchestrates ephemeral local GitHub Actions runners, workflow dispatch, live run monitoring, and guaranteed teardown.
+# Orchestrates disposable local GitHub Actions runners (inside an isolated Multipass VM or on host),
+# workflow dispatch, live run monitoring, and guaranteed teardown.
 
 # Fail fast on command errors, unset variables, or broken pipes during normal execution.
 set -euo pipefail
@@ -7,38 +8,46 @@ set -euo pipefail
 # Resolve this script's directory so helper libraries load reliably regardless of caller working directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Target repository, workflow filename (must exist on default branch), and branch under test.
+# Target repository, workflow filename (must exist on default branch), branch under test, and runner backend ('vm' or 'host').
 REPO="${REPO:-selvakuppusamy/tiny-infra-lab}"
 WORKFLOW="${WORKFLOW:-01-self-hosted-runner-check.yaml}"
 BRANCH="${BRANCH:-self-hosted-local-runner}"
+RUNNER_MODE="${RUNNER_MODE:-vm}"
 
 # Number of concurrent local runner instances to provision (defaults to 1).
 RUNNER_COUNT="${1:-1}"
 
-# Load runner lifecycle and workflow dispatch helper modules.
-source "$SCRIPT_DIR/lib/runner.sh"
+# Validate requested runner mode and load the matching runner backend + workflow dispatch module.
+case "$RUNNER_MODE" in
+  vm)
+    source "$SCRIPT_DIR/lib/multipass.sh"
+    ;;
+  host)
+    source "$SCRIPT_DIR/lib/runner.sh"
+    ;;
+  *)
+    echo "Runner mode must be 'vm' or 'host' (got: '$RUNNER_MODE')." >&2
+    exit 1
+    ;;
+esac
 source "$SCRIPT_DIR/lib/workflow.sh"
 
-# Tear down all started runner processes and GitHub registrations on any exit while preserving the original exit code.
+# Tear down all started runner processes, GitHub registrations, and disposable VMs on any exit while preserving the original exit code.
 cleanup() {
   local exit_code=$?
 
-  # Disarm traps and disable strict mode so one failed teardown step never blocks remaining runners.
+  # Disarm traps and disable strict mode so one failed teardown step never blocks remaining cleanup.
   trap - EXIT INT TERM
   set +eu
 
-  # Run runner teardown if this session started processes or registered any runner instances.
-  if [[ ${#STARTED_RUNNER_PIDS[@]} -gt 0 || ${#REGISTERED_RUNNERS[@]} -gt 0 ]]; then
-    echo "Tearing down session runners (preserving exit code: $exit_code)..."
+  if has_session_resources; then
+    echo "Tearing down session resources (mode: $RUNNER_MODE, preserving exit code: $exit_code)..."
     stop_all_runners
     deregister_all_runners "$REPO"
-    # Future hook: Multipass VM teardown (e.g. destroy_all_vms) slots in here.
+    finalize_runner_environment
     echo "Teardown finished."
-  fi
-
-  # Keep session directory intact so runner.log and _diag/pages/*.log stay available for debugging.
-  if [[ -n "${SESSION_DIR:-}" && -d "$SESSION_DIR" ]]; then
-    echo "Diagnostic logs retained at: $SESSION_DIR"
+  else
+    finalize_runner_environment
   fi
 
   exit "$exit_code"
@@ -51,7 +60,7 @@ handle_signal() {
   exit "$signal_exit_code"
 }
 
-# Register exit and signal traps before creating any stateful directories, processes, or GitHub registrations.
+# Register exit and signal traps before creating any VMs, directories, processes, or GitHub registrations.
 trap cleanup EXIT
 trap 'handle_signal 130' INT
 trap 'handle_signal 143' TERM
@@ -62,10 +71,12 @@ if ! [[ "$RUNNER_COUNT" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
-# Verify GitHub CLI authentication before downloading or registering anything.
+echo "Selected runner mode: $RUNNER_MODE"
+
+# Verify GitHub CLI authentication before downloading, launching VMs, or registering anything.
 gh auth status
 
-# Provision, register, start, and verify readiness of local self-hosted runners.
+# Provision, register, start, and verify readiness of local self-hosted runners (VM or host).
 detect_runner_platform
 prepare_runner_session "$REPO" "$RUNNER_COUNT"
 register_runners "$REPO" "$RUNNER_COUNT"
